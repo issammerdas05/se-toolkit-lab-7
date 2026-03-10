@@ -186,7 +186,7 @@ All items in this category are conditional — include only when the lab involve
 
 - [`AGENTS.md`](../AGENTS.md) — Canonical agent instructions. Points agents to the correct convention files for each part of the repository. [`CLAUDE.md`](../CLAUDE.md) and [`QWEN.md`](../QWEN.md) are symlinks to this file. See [Agent configuration](#9-agent-configuration-agentsmd).
 - [`.agents/skills/`](../.agents/skills/) — Skill definitions (one subdirectory per skill, each with a `SKILL.md`). [`.claude/`](../.claude/) and [`.qwen/`](../.qwen/) are symlinks to [`.agents/`](../.agents/).
-- [`.agents/settings.local.json`](../.agents/settings.local.json) — Permission allowlist for agent tools. Machine-specific, not committed to version control.
+- `.agents/settings.local.json` — Permission allowlist for agent tools. Machine-specific, not committed to version control.
 
 ### 2.8. Other
 
