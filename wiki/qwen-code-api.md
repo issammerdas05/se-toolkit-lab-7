@@ -161,7 +161,7 @@ Complete these steps:
    [run in the `VS Code Terminal`](./vs-code.md#run-a-command-in-the-vs-code-terminal):
 
    ```terminal
-   docker compose up --build -d
+   docker compose --env-file .env.secret up --build -d
    ```
 
 ### Check that the `Qwen Code` API is accessible
