@@ -55,7 +55,7 @@
 >
 > - `(LOCAL)` - on your local machine (laptop).
 >
-> - `(VM)` - on your VM.
+> - `(REMOTE)` - on your VM.
 
 > [!NOTE]
 > We provide the hardest setup steps before all other tasks
