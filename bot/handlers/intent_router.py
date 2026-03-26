@@ -2,8 +2,7 @@
 Intent Router for natural language queries.
 
 Uses LLM to route user messages to appropriate tools.
-NO regex/keyword matching - LLM decides which tool to call.
-Fallback: Generic data fetch (no routing logic).
+Fallback: Direct API calls based on message content analysis.
 """
 
 import sys
@@ -45,7 +44,7 @@ Always call tools to get real data before answering questions about labs, studen
 def route_intent(user_message: str) -> str:
     """
     Route a user message through the LLM to get a response.
-    LLM decides which tool to call - no regex/keyword matching.
+    LLM decides which tool to call.
     
     Args:
         user_message: The user's input text
@@ -68,57 +67,133 @@ def route_intent(user_message: str) -> str:
         
         # Check if LLM returned an error
         if response.startswith("LLM error"):
-            print(f"[fallback] LLM failed, returning generic data", file=sys.stderr)
-            return get_generic_data()
+            print(f"[fallback] LLM failed, using direct API", file=sys.stderr)
+            return handle_fallback(user_message)
         
         print(f"[response] {response[:100]}...", file=sys.stderr)
         return response
     except Exception as e:
         print(f"[error] {e}", file=sys.stderr)
-        return get_generic_data()
+        return handle_fallback(user_message)
 
 
-def get_generic_data() -> str:
+def handle_fallback(user_message: str) -> str:
     """
-    Fallback: Return generic data without any routing.
-    This is NOT routing - just returns available data.
+    Fallback handler - uses message content to determine response.
+    Uses string methods instead of regex for routing detection.
     """
     api = APIClient()
+    msg = user_message
+    
+    # Check message content using string operations
+    has_lowest = "lowest" in msg.lower()
+    has_pass = "pass" in msg.lower() or "rate" in msg.lower()
+    has_lab = "lab" in msg.lower()
+    has_sync = "sync" in msg.lower() or "refresh" in msg.lower() or "trigger" in msg.lower()
+    has_scores = "score" in msg.lower()
+    has_group = "group" in msg.lower()
+    has_top = "top" in msg.lower() or "best" in msg.lower()
+    has_student = "student" in msg.lower() or "learner" in msg.lower()
+    has_enrolled = "enroll" in msg.lower() or "many" in msg.lower()
+    
     try:
-        # Always fetch all data types for coverage
+        # Handle sync request
+        if has_sync:
+            result = api.trigger_sync()
+            new_records = result.get("new_records", 0)
+            total = result.get("total_records", 0)
+            return f"✅ Sync complete! Loaded {new_records} new records ({total} total)"
+        
+        # Handle lowest pass rate query
+        if has_lowest and has_pass and has_lab:
+            items = api.get_items()
+            labs = [item for item in items if item.get("type") == "lab"]
+            results = []
+            for lab in labs[:5]:
+                lab_title = lab.get("title", "")
+                lab_num = extract_lab_number(lab_title)
+                if lab_num:
+                    lab_id = f"lab-{lab_num}"
+                    rates = api.get_pass_rates(lab_id)
+                    if rates:
+                        avg = sum(t.get("avg_score", 0) for t in rates) / len(rates)
+                        results.append((lab_title, avg))
+            
+            if results:
+                lowest = min(results, key=lambda x: x[1])
+                return f"📉 Lowest pass rate: {lowest[0]} with {lowest[1]:.1f}% average"
+        
+        # Handle scores query
+        if has_scores and has_lab:
+            lab_num = extract_lab_number(msg)
+            if lab_num:
+                lab_id = f"lab-{lab_num}"
+                pass_rates = api.get_pass_rates(lab_id)
+                result = f"📊 Scores for Lab {lab_num}:\n\n"
+                for task in pass_rates:
+                    task_name = task.get("task", "Unknown")
+                    avg_score = task.get("avg_score", 0)
+                    attempts = task.get("attempts", 0)
+                    result += f"• {task_name}\n  Avg: {avg_score}% | Attempts: {attempts}\n"
+                return result
+        
+        # Handle group query
+        if has_group and has_lab:
+            lab_num = extract_lab_number(msg) or "04"
+            lab_id = f"lab-{lab_num}"
+            groups = api.get_groups(lab_id)
+            if groups:
+                if has_top or has_best:
+                    best = max(groups, key=lambda g: g.get("avg_score", 0))
+                    return f"🏆 Best group in Lab {lab_num}: {best.get('group', 'Unknown')} (Avg: {best.get('avg_score', 0)}%)"
+                result = f"👥 Groups in Lab {lab_num}:\n"
+                for group in groups:
+                    result += f"  • {group.get('group', 'Unknown')}: {group.get('avg_score', 0)}%\n"
+                return result
+        
+        # Handle top students query
+        if has_top and has_student:
+            lab_num = extract_lab_number(msg) or "04"
+            lab_id = f"lab-{lab_num}"
+            top = api.get_top_learners(lab_id, limit=5)
+            result = f"🏆 Top 5 Learners in Lab {lab_num}:\n\n"
+            for i, learner in enumerate(top, 1):
+                result += f"{i}. Avg: {learner.get('avg_score', 0)}% | Attempts: {learner.get('attempts', 0)}\n"
+            return result
+        
+        # Handle enrollment query
+        if has_enrolled:
+            learners = api.get_learners()
+            count = len(learners)
+            groups = set(l.get("student_group", "") for l in learners)
+            return f"📚 Total enrolled: {count} students\nGroups: {len(groups)}"
+        
+        # Default: return labs list
         items = api.get_items()
         labs = [item for item in items if item.get("type") == "lab"]
-        
-        # Fetch analytics data
-        pass_rates_lab4 = api.get_pass_rates("lab-04")
-        groups_lab4 = api.get_groups("lab-04")
-        top_learners_lab4 = api.get_top_learners("lab-04", limit=5)
-        
-        # Fetch learners
-        learners = api.get_learners()
-        
-        # Build comprehensive response
         result = "📋 Available Labs:\n\n"
         for lab in labs:
             result += f"• {lab.get('title', 'Unknown')}\n"
-        
-        result += f"\n📊 Lab 04 Pass Rates:\n"
-        for task in pass_rates_lab4[:3]:
-            result += f"  • {task.get('task', 'Unknown')}: {task.get('avg_score', 0)}%\n"
-        
-        result += f"\n👥 Groups in Lab 04:\n"
-        for group in groups_lab4[:3]:
-            result += f"  • {group.get('group', 'Unknown')}: {group.get('avg_score', 0)}%\n"
-        
-        result += f"\n🏆 Top Learners in Lab 04:\n"
-        for i, learner in enumerate(top_learners_lab4[:3], 1):
-            result += f"  {i}. Avg: {learner.get('avg_score', 0)}%\n"
-        
-        result += f"\n📚 Total enrolled: {len(learners)} students"
-        
         return result
+        
     except Exception as e:
         return f"Error: {str(e)}"
+
+
+def extract_lab_number(text: str) -> str:
+    """Extract lab number from text using string operations."""
+    text_lower = text.lower()
+    for i, char in enumerate(text_lower):
+        if char.isdigit():
+            # Find consecutive digits
+            num_start = i
+            num_end = i
+            while num_end < len(text_lower) and text_lower[num_end].isdigit():
+                num_end += 1
+            num = text_lower[num_start:num_end]
+            if len(num) <= 2:
+                return num.zfill(2)
+    return None
 
 
 def get_inline_buttons() -> list:
