@@ -59,7 +59,7 @@ def handle_test_command(command: str) -> str:
         else:
             return f"Unknown command: {command}"
     else:
-        # Natural language - use LLM intent router
+        # Natural language - use LLM intent router (NO regex routing)
         return route_intent(command)
 
 
@@ -96,7 +96,14 @@ def start_telegram_bot():
         print("LLM API URL:", os.environ.get("LLM_API_BASE_URL", "NOT SET"))
         
         async def start(update: Update, context):
-            await update.message.reply_text(handle_test_command("/start"))
+            keyboard = [
+                [InlineKeyboardButton("📋 List Labs", callback_data="list_labs")],
+                [InlineKeyboardButton("📊 Lab Scores", callback_data="show_scores")],
+                [InlineKeyboardButton("🏆 Top Students", callback_data="top_students")],
+                [InlineKeyboardButton("👥 Groups", callback_data="show_groups")],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(handle_test_command("/start"), reply_markup=reply_markup)
         
         async def help_cmd(update: Update, context):
             await update.message.reply_text(handle_test_command("/help"))
