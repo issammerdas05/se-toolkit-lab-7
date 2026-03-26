@@ -65,14 +65,92 @@ def handle_test_command(command: str) -> str:
 
 def start_telegram_bot():
     """Start the Telegram bot with inline keyboard support."""
-    print("Starting Telegram bot...")
-    print("Bot token:", os.environ.get("BOT_TOKEN", "NOT SET"))
-    print("LMS API URL:", os.environ.get("LMS_API_BASE_URL", "NOT SET"))
-    print("LLM API URL:", os.environ.get("LLM_API_BASE_URL", "NOT SET"))
-    print("\nInline keyboard buttons enabled for common actions.")
-    print("For now, use --test mode to test handlers:")
-    print("  uv run bot.py --test '/start'")
-    print("  uv run bot.py --test 'what labs are available'")
+    bot_token = os.environ.get("BOT_TOKEN", "")
+    
+    if not bot_token or bot_token == "<bot-token>" or bot_token == "fake-token":
+        print("Starting Telegram bot...")
+        print("Bot token:", bot_token)
+        print("LMS API URL:", os.environ.get("LMS_API_BASE_URL", "NOT SET"))
+        print("LLM API URL:", os.environ.get("LLM_API_BASE_URL", "NOT SET"))
+        print("\nInline keyboard buttons enabled for common actions.")
+        print("\n⚠️  BOT_TOKEN not configured. Running in demo mode.")
+        print("Set BOT_TOKEN in environment to connect to Telegram.")
+        print("\nFor now, use --test mode to test handlers:")
+        print("  uv run bot.py --test '/start'")
+        print("  uv run bot.py --test 'what labs are available'")
+        
+        # Keep running in demo mode
+        import time
+        print("\nBot running in demo mode. Press Ctrl+C to stop.")
+        while True:
+            time.sleep(60)
+        return
+    
+    try:
+        from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+        from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
+        
+        print("Starting Telegram bot...")
+        print("Bot token: [CONFIGURED]")
+        print("LMS API URL:", os.environ.get("LMS_API_BASE_URL", "NOT SET"))
+        print("LLM API URL:", os.environ.get("LLM_API_BASE_URL", "NOT SET"))
+        
+        async def start(update: Update, context):
+            await update.message.reply_text(handle_test_command("/start"))
+        
+        async def help_cmd(update: Update, context):
+            await update.message.reply_text(handle_test_command("/help"))
+        
+        async def health(update: Update, context):
+            await update.message.reply_text(handle_test_command("/health"))
+        
+        async def labs(update: Update, context):
+            await update.message.reply_text(handle_test_command("/labs"))
+        
+        async def scores(update: Update, context):
+            lab = " ".join(context.args) if context.args else ""
+            await update.message.reply_text(handle_test_command(f"/scores {lab}"))
+        
+        async def message_handler(update: Update, context):
+            text = update.message.text
+            response = handle_test_command(text)
+            await update.message.reply_text(response)
+        
+        async def button_handler(update: Update, context):
+            query = update.callback_query
+            await query.answer()
+            callback = query.data
+            if callback == "list_labs":
+                await query.edit_message_text(handle_test_command("/labs"))
+            elif callback == "show_scores":
+                await query.edit_message_text("Send: /scores lab-04")
+            elif callback == "top_students":
+                await query.edit_message_text(handle_test_command("top 5 students in lab 4"))
+            elif callback == "show_groups":
+                await query.edit_message_text(handle_test_command("show groups in lab 4"))
+        
+        # Create application
+        application = Application.builder().token(bot_token).build()
+        
+        # Add handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_cmd))
+        application.add_handler(CommandHandler("health", health))
+        application.add_handler(CommandHandler("labs", labs))
+        application.add_handler(CommandHandler("scores", scores))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+        application.add_handler(CallbackQueryHandler(button_handler))
+        
+        print("\nBot started! Polling for messages...")
+        
+        # Start polling
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+        
+    except ImportError as e:
+        print(f"Telegram library not installed: {e}")
+        print("Run: uv sync")
+    except Exception as e:
+        print(f"Error starting bot: {e}")
 
 
 if __name__ == "__main__":
