@@ -87,3 +87,4 @@ This separation ensures testability - handlers work without Telegram connection 
 - Use `uv` for dependency management (not pip)
 - Never commit secrets (`.env.bot.secret` is gitignored)
 - Follow Git workflow: issue → branch → PR → review → merge
+# Task 2: Backend Integration Complete
